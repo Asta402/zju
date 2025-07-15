@@ -21,7 +21,7 @@ public class DataParser {
 
     // 正则表达式，用于解析数据格式
     private static final Pattern DATA_PATTERN = Pattern.compile(
-            "\\[(\\d+)\\]index:\\s*(\\d+)\\s*-\\s*x:\\s*([\\d.-]+)\\s*y:\\s*([\\d.-]+)\\s*z:\\s*([\\d.-]+)\\s*v:\\s*([\\d.-]+)"
+            "\\[(\\d+)\\]index:\\s*(\\d+)\\s*-\\s*x:\\s*([\\d.-]+)\\s*y:\\s*([\\d.-]+)\\s*z:\\s*([\\d.-]+)\\s*t:\\s*([\\d.-]+)"
     );
 
     // 用于显示解析后数据的 TextView
@@ -78,6 +78,7 @@ public class DataParser {
     public void processIncomingData(String rawData) {
         try {
             databuffer.append(rawData); // 缓存接收到的数据
+            Log.e("processed_data:",databuffer.toString());
             String buffercontent = databuffer.toString();
             buffercontent = buffercontent.replace("\r", "").replace("\t", " "); // 清除换行符和制表符
             String[] lines = buffercontent.split("\\n"); // 按行分割数据
@@ -138,7 +139,7 @@ public class DataParser {
                 parseDoubleSafely(matcher.group(3)), // x
                 parseDoubleSafely(matcher.group(4)), // y
                 parseDoubleSafely(matcher.group(5)), // z
-                parseDoubleSafely(matcher.group(6))  // v
+                parseDoubleSafely(matcher.group(6))  // t
         );
     }
 
@@ -166,8 +167,8 @@ public class DataParser {
      */
     private void updateDisplay(SensorData data) {
         String displayText = String.format(
-                "时间戳: %d\n索引: %d\nX: %.3f\nY: %.3f\nZ: %.3f\nV: %.3f",
-                data.timestamp, data.index, data.x, data.y, data.z, data.v
+                "时间戳: %d\n索引: %d\nX: %.3f\nY: %.3f\nZ: %.3f\nT: %.3f",
+                data.timestamp, data.index, data.x, data.y, data.z, data.t
         );
         tvParsedData.setText(displayText); // 更新 TextView
     }
@@ -204,7 +205,7 @@ public class DataParser {
 
             // 如果文件是空的，写入表头
             if (fos.getChannel().position() == 0) {
-                writer.write("世界时间, 时间戳, 索引, X, Y, Z, V\n");
+                writer.write("世界时间, 时间戳, 索引, X, Y, Z, T\n");
             }
 
             // 获取当前世界时间
@@ -213,7 +214,7 @@ public class DataParser {
             // 格式化数据并写入文件
             String dataString = String.format(
                     "%s, %d, %d, %.3f, %.3f, %.3f, %.3f\n",
-                    worldTime, data.timestamp, data.index, data.x, data.y, data.z, data.v
+                    worldTime, data.timestamp, data.index, data.x, data.y, data.z, data.t
             );
             writer.write(dataString); // 将数据写入文件
             Log.d(TAG, "Data saved to " + currentFileName);  // 记录保存的文件名
@@ -253,13 +254,13 @@ public class DataParser {
 
             // 如果文件是空的，写入表头
             if (fos.getChannel().position() == 0) {
-                writer.write("世界时间, 时间戳, 索引, X, Y, Z, V\n");
+                writer.write("世界时间, 时间戳, 索引, X, Y, Z, T\n");
             }
 
             String worldTime = getWorldTime();
             String dataString = String.format(
                     "%s, %d, %d, %.3f, %.3f, %.3f, %.3f\n",
-                    worldTime, data.timestamp, data.index, data.x, data.y, data.z, data.v
+                    worldTime, data.timestamp, data.index, data.x, data.y, data.z, data.t
             );
             writer.write(dataString);
 

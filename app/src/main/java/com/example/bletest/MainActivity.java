@@ -26,6 +26,9 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
     // 设备连接状态和数据保存状态标志
     private boolean isConnected = false;
 
+    private Thread readdatathread;
+
+    private boolean isreadding;
 
     // 初始化视图组件
     private void initViews() {
@@ -55,7 +58,6 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         Log.e("sss", "布局初始化成功");
         initComponents();
         Log.e("sss", "组件初始化成功");
-
         // 设置按钮点击事件监听器
         setupClickListeners();
         Log.e("sss", "事件绑定成功");
@@ -63,6 +65,17 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         // 更新UI
         updateUI();
         executorService = Executors.newSingleThreadExecutor();
+        readdatathread = new Thread(() -> {
+            while(isreadding) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+        });
+
     }
 
     // 初始化管理器
@@ -111,7 +124,17 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
 
         btnDisconnect.setOnClickListener(v -> bleManager.disconnectDevice());
         btnPermissions.setOnClickListener(v -> permissionManager.requestBluetoothPermissions());
-        btnReadData.setOnClickListener(v -> bleManager.readData());
+        btnReadData.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+              if(isreadding){
+
+              }else{
+                  isreadding = true;
+                  readdatathread.start();
+              }
+            }
+        });
 //        btnSendTest.setOnClickListener(v -> bleManager.sendData("TEST"));
         btnClearData.setOnClickListener(v -> clearAllData());
         btnSaveData.setOnClickListener(v -> saveDataForTwoSeconds());
@@ -131,14 +154,11 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         dataParser.setSavingNoiseData(false);  // 暂时停止保存噪声数据
         // 生成新的文件名，基于当前时间戳
         String currentFileName = "sensor_data_" + System.currentTimeMillis() + ".csv";
-
         // 设置标志位为 true，开始保存数据
         dataParser.setSavingData(true);
         dataParser.setCurrentFileName(currentFileName);  // 设置新的文件名
-
         // 两秒后将标志位设为 false，停止保存
         final Handler handler = new Handler();
-
         // 设置两秒后停止保存
         handler.postDelayed(() -> {
             dataParser.setSavingData(false); // 停止保存正样本数据
@@ -187,6 +207,7 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
     }
     @Override
     public void onDataReceived(String data) {
+//        Log.e("raw data:", data);
         dataParser.processIncomingData(data);
         addLogMessage("接收数据: " + data);
     }

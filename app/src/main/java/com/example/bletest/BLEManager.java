@@ -42,10 +42,10 @@ public class BLEManager {
     private final BluetoothLeScanner bleScanner;
     private final Handler handler = new Handler();
 
-    private BluetoothGatt bluetoothGatt;
+    public BluetoothGatt bluetoothGatt;
     private boolean isScanning = false;
     private BluetoothDevice targetDevice;
-    private BluetoothGattCharacteristic txCharacteristic;
+    public BluetoothGattCharacteristic txCharacteristic;
     private BluetoothGattCharacteristic rxCharacteristic;
 
     // 定义蓝牙回调接口
@@ -278,6 +278,7 @@ public class BLEManager {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             byte[] data = characteristic.getValue();
+//            Log.e("rawraw data:" , String.valueOf(data));
             if (data != null && data.length > 0) {
                 callback.onDataReceived(new String(data)); // 处理数据接收
             }
@@ -285,11 +286,11 @@ public class BLEManager {
 
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                byte[] data = characteristic.getValue();
-                if (data != null) {
-                    callback.onDataReceived(new String(data)); // 处理数据读取
-                }
+            byte[] data = characteristic.getValue();
+            Log.e("ssss",data.toString());// 处理数据读取sss
+            if (data != null) {
+                callback.onDataReceived(new String(data));
+
             }
         }
     };
