@@ -29,7 +29,7 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
     private Thread readdatathread;
 
     private boolean isreadding;
-
+    private int fileCounter = 1;  // 文件计数器
     // 初始化视图组件
     private void initViews() {
         btnScan = findViewById(R.id.btn_scan);
@@ -116,25 +116,11 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
             // 开始保存噪声数据
             dataParser.setSavingNoiseData(true);  // 开始保存噪声数据
 
-            String noiseFileName = "noise_data_" + System.currentTimeMillis() + ".csv";  // 文件名基于当前时间戳
-            dataParser.setCurrentFileName(noiseFileName);  // 设置新的文件名
-
         });
 
 
         btnDisconnect.setOnClickListener(v -> bleManager.disconnectDevice());
         btnPermissions.setOnClickListener(v -> permissionManager.requestBluetoothPermissions());
-        btnReadData.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-              if(isreadding){
-
-              }else{
-                  isreadding = true;
-                  readdatathread.start();
-              }
-            }
-        });
 //        btnSendTest.setOnClickListener(v -> bleManager.sendData("TEST"));
         btnClearData.setOnClickListener(v -> clearAllData());
         btnSaveData.setOnClickListener(v -> saveDataForTwoSeconds());
@@ -148,28 +134,24 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         Toast.makeText(this, "数据已清空", Toast.LENGTH_SHORT).show();
     }
 
-    // 保存数据两秒
-// 保存数据两秒并保存到新文件
     private void saveDataForTwoSeconds() {
-        dataParser.setSavingNoiseData(false);  // 暂时停止保存噪声数据
-        // 生成新的文件名，基于当前时间戳
-        String currentFileName = "sensor_data_" + System.currentTimeMillis() + ".csv";
-        // 设置标志位为 true，开始保存数据
+        dataParser.setSavingNoiseData(false);
+        Log.d("SaveData", "噪声数据保存结束，文件已关闭");
+
         dataParser.setSavingData(true);
-        dataParser.setCurrentFileName(currentFileName);  // 设置新的文件名
-        // 两秒后将标志位设为 false，停止保存
+
+
+        // 3. 2秒后停止正样本数据，并重新启动噪声数据（生成新文件）
         final Handler handler = new Handler();
-        // 设置两秒后停止保存
         handler.postDelayed(() -> {
-            dataParser.setSavingData(false); // 停止保存正样本数据
+            dataParser.setSavingData(false);  // 停止正样本数据
             Log.d("SaveData", "正样本数据保存结束");
-
-            // 两秒后继续采集噪声数据
-            dataParser.setSavingNoiseData(true);  // 重新开始保存噪声数据
-            Log.d("SaveData", "开始保存噪声数据");
+            dataParser.setSavingNoiseData(true); // 启动噪声记录
+            Log.d("SaveData", "噪声数据新文件已创建，继续采集");
         }, 2000);
-    }
 
+        fileCounter++;  // 更新正样本文件计数器
+    }
 
     // 更新UI界面
     private void updateUI() {

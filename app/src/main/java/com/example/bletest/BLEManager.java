@@ -149,23 +149,6 @@ public class BLEManager {
     }
 
     /**
-     * 读取数据
-     */
-    public void readData() {
-        if (bluetoothGatt == null || txCharacteristic == null) {
-            callback.onError("未连接或特征不可用");
-            return;
-        }
-
-        if (!hasPermissions()) {
-            callback.onError("缺少蓝牙权限");
-            return;
-        }
-
-        bluetoothGatt.readCharacteristic(txCharacteristic);
-    }
-
-    /**
      * 获取当前是否正在扫描
      *
      * @return 是否正在扫描
@@ -239,6 +222,9 @@ public class BLEManager {
                 gatt.discoverServices();
                 callback.onDeviceConnected(targetDevice.getName());
                 reconnectAttempts = 0; // 连接成功后重置重连次数
+
+                // 请求MTU，设置为247
+                gatt.requestMtu(247); // 请求最大MTU
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 Log.d(TAG, "设备已断开连接");
                 callback.onDeviceDisconnected();
@@ -278,19 +264,20 @@ public class BLEManager {
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             byte[] data = characteristic.getValue();
-//            Log.e("rawraw data:" , String.valueOf(data));
             if (data != null && data.length > 0) {
                 callback.onDataReceived(new String(data)); // 处理数据接收
             }
         }
 
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            byte[] data = characteristic.getValue();
-            Log.e("ssss",data.toString());// 处理数据读取sss
-            if (data != null) {
-                callback.onDataReceived(new String(data));
 
+
+        // 新增MTU请求的回调处理
+        @Override
+        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "MTU设置成功，当前MTU大小: " + mtu);
+            } else {
+                Log.e(TAG, "MTU设置失败，错误码: " + status);
             }
         }
     };
@@ -315,4 +302,5 @@ public class BLEManager {
             callback.onError("最大重连次数已达到，无法重连。");
         }
     }
+
 }

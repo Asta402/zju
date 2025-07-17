@@ -14,7 +14,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.List;
 import java.util.ArrayList;
-
+import android.os.Environment;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.IOException;
+import android.content.Context;
+import android.util.Log;
 public class DataParser {
     // TAG 用于日志输出
     private static final String TAG = "DataParser";
@@ -39,16 +46,18 @@ public class DataParser {
     // 控制是否保存数据的标志位
     private boolean isSavingData = false;
     private String currentFileName;  // 用于存储当前的文件名
-    private String noiseDataFileName = "noise_data.csv";  // 噪声数据文件
-    public boolean isSavingNoiseData = true;
 
+    public boolean isSavingNoiseData = true;
+    private int noiseFileCounter = -1;  // 初始计数器
+    private int FileCounter =0 ;
+    private FileOutputStream currentFileOutputStream = null;  // 当前文件输出流
+    private BufferedWriter writer = null;  // 当前文件的 BufferedWriter
     // 用于检查是否正在保存噪声数据
     public boolean isSavingNoiseData() {
         return this.isSavingNoiseData;  // 返回当前的保存状态
     }
-    public void setSavingNoiseData(boolean isSaving) {
-        this.isSavingNoiseData = isSaving;
-    }
+
+
 
     // 定义数据解析后的回调接口
     public interface DataDisplayCallback {
@@ -65,9 +74,7 @@ public class DataParser {
     }
 
     // 允许外部控制是否保存数据
-    public void setSavingData(boolean isSavingData) {
-        this.isSavingData = isSavingData;
-    }
+
 
     /**
      * 处理接收到的原始数据
@@ -185,29 +192,65 @@ public class DataParser {
         return sdf.format(now); // 格式化并返回世界时间
     }
 
+    public void setSavingData(boolean isSaving) {
+        if (isSaving == this.isSavingData) {
+            return;  // 如果状态未变化时，直接返回
+        }
+
+        this.isSavingData = isSaving;
+
+        if (isSaving) {
+            // 每次开始保存时，创建一个新的文件
+            FileCounter++;  // 更新计数器，确保文件名唯一
+
+            // 生成新的文件名
+            String dataFileName = "px_c_a_" + FileCounter + ".txt";  // 可以根据需要修改扩展名
+
+            // 获取Download目录
+            File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+            File outputFile = new File(downloadDir, dataFileName);  // 新文件路径
+
+            try {
+                // 以追加模式打开文件
+                currentFileOutputStream = new FileOutputStream(outputFile, true);
+                writer = new BufferedWriter(new OutputStreamWriter(currentFileOutputStream));
+
+                // 如果文件为空时，写入表头
+                if (outputFile.length() == 0) {
+                    writer.write("世界时间, 时间戳, 索引, X, Y, Z, T\n");
+                }
+
+                Log.d(TAG, "正样本数据开始保存到文件: " + outputFile.getAbsolutePath());
+            } catch (IOException e) {
+                Log.e(TAG, "无法创建正样本数据文件", e);
+            }
+        } else {
+            // 停止保存正样本数据
+            try {
+                if (writer != null) {
+                    writer.close();
+                }
+                if (currentFileOutputStream != null) {
+                    currentFileOutputStream.close();
+                }
+                Log.d(TAG, "正样本数据保存已停止");
+            } catch (IOException e) {
+                Log.e(TAG, "关闭正样本数据文件时出错", e);
+            }
+        }
+    }
+
     /**
      * 将传感器数据保存到 CSV 文件，并加上世界时间
      *
      * @param data 要保存的传感器数据
      */
+// 保存正样本数据到txt文件
     public void saveDataToCSVFile(SensorData data) {
-        if (currentFileName == null) {
-            Log.w(TAG, "No file selected. Please click the button first.");
-            return;  // 如果没有文件名，什么都不做
+        if (!isSavingData || writer == null) {  // 只有在开启保存时才会执行
+            return;  // 如果未开启保存或文件未初始化时跳过
         }
-
-        FileOutputStream fos = null;
-        BufferedWriter writer = null;
         try {
-            // 获取应用的内部存储文件
-            fos = tvParsedData.getContext().openFileOutput(currentFileName, Context.MODE_APPEND);  // 使用当前文件名
-            writer = new BufferedWriter(new OutputStreamWriter(fos));
-
-            // 如果文件是空的，写入表头
-            if (fos.getChannel().position() == 0) {
-                writer.write("世界时间, 时间戳, 索引, X, Y, Z, T\n");
-            }
-
             // 获取当前世界时间
             String worldTime = getWorldTime();
 
@@ -217,22 +260,14 @@ public class DataParser {
                     worldTime, data.timestamp, data.index, data.x, data.y, data.z, data.t
             );
             writer.write(dataString); // 将数据写入文件
-            Log.d(TAG, "Data saved to " + currentFileName);  // 记录保存的文件名
+            writer.flush(); // 确保数据立即写入文件
+            Log.d(TAG, "正样本数据保存到文件");
+
         } catch (IOException e) {
-            Log.e(TAG, "Error saving data to CSV file", e); // 错误日志
-        } finally {
-            try {
-                if (writer != null) {
-                    writer.close();
-                }
-                if (fos != null) {
-                    fos.close();
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Error closing file output stream", e);  // 关闭流时的错误日志
-            }
+            Log.e(TAG, "保存正样本数据失败", e);  // 错误日志
         }
     }
+
 
     /**
      * 清空数据
@@ -244,28 +279,56 @@ public class DataParser {
         Log.i(TAG, "All data cleared"); // 记录日志
     }
 
+    // 保存噪声数据到txt文件
     public void saveNoiseDataToCSVFile(SensorData data) {
-        if (!isSavingNoiseData) {
-            return;
+        if (!isSavingNoiseData || writer == null) {
+            return; // 未开启保存或文件未初始化时跳过
         }
-        Log.e("ssd",data.toString());
-        try (FileOutputStream fos = tvParsedData.getContext().openFileOutput(noiseDataFileName, Context.MODE_APPEND);
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fos))) {
-
-            // 如果文件是空的，写入表头
-            if (fos.getChannel().position() == 0) {
-                writer.write("世界时间, 时间戳, 索引, X, Y, Z, T\n");
-            }
-
+        try {
             String worldTime = getWorldTime();
             String dataString = String.format(
                     "%s, %d, %d, %.3f, %.3f, %.3f, %.3f\n",
                     worldTime, data.timestamp, data.index, data.x, data.y, data.z, data.t
             );
-            writer.write(dataString);
-
+            writer.write(dataString); // 写入数据
+            writer.flush(); // 实时写入文件，避免缓冲延迟
         } catch (IOException e) {
-            Log.e(TAG, "Error saving noise data to CSV file", e);
+            Log.e(TAG, "保存噪声数据失败", e);
         }
     }
+
+    // 修改启动保存逻辑，保存为txt文件
+    public void setSavingNoiseData(boolean isSaving) {
+        if (isSaving == this.isSavingNoiseData) {
+            return; // 状态未变化时直接返回
+        }
+
+        this.isSavingNoiseData = isSaving;
+
+        if (isSaving) {
+            // 生成新文件名（如 px_1_x.txt, px_2_x.txt...）
+            String noiseFileName = "px_n_" + noiseFileCounter + ".txt";  // 更改为.txt扩展名
+            noiseFileCounter--; // 每次保存后递增计数器，确保文件名唯一
+            try {
+                // 获取Download目录
+                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                File outputFile = new File(downloadDir, noiseFileName); // 文件路径
+
+                // 以追加模式打开文件
+                currentFileOutputStream = new FileOutputStream(outputFile, true);
+                writer = new BufferedWriter(new OutputStreamWriter(currentFileOutputStream));
+
+                // 如果是新文件，写入表头
+                if (outputFile.length() == 0) {  // 文件为空时写入表头
+                    writer.write("世界时间, 时间戳, 索引, X, Y, Z, T\n");
+                }
+                Log.d(TAG, "开始保存噪声数据到文件: " + outputFile.getAbsolutePath());
+            } catch (IOException e) {
+                Log.e(TAG, "无法创建噪声数据文件", e);
+            }
+        }
+    }
+
+
+
 }
