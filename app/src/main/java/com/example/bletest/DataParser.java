@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import android.os.Environment;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.util.Arrays;
 import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.IOException;
@@ -83,55 +84,70 @@ public class DataParser {
      * @param rawData 原始接收到的数据
      */
     public void processIncomingData(String rawData) {
-        try {
-            databuffer.append(rawData); // 缓存接收到的数据
-            Log.e("processed_data:",databuffer.toString());
-            String buffercontent = databuffer.toString();
-            buffercontent = buffercontent.replace("\r", "").replace("\t", " "); // 清除换行符和制表符
-            String[] lines = buffercontent.split("\\n"); // 按行分割数据
+        Log.e("raw data: ", rawData);
+        databuffer.append(rawData);
+        Log.e("processed_data:", databuffer.toString());
 
-            // 遍历每一行数据并进行解析
-            for (int i = 0; i < lines.length - 1; i++) {
-                String line = lines[i].trim().replaceAll("\\s+", " ").trim();
-                parseData(line); // 解析每一行数据
+        String buffercontent = databuffer.toString()
+                .replace("\r", "")
+                .replace("\t", " ");
+
+        String[] lines = buffercontent.split("\\n");
+        Log.e("lines", Arrays.toString(lines));
+        int lastProcessedPosition = 0;
+
+
+        for (String line : lines) {
+            String cleanLine = line.trim().replaceAll("\\s+", " ").trim();
+            if (cleanLine.isEmpty()) {
+                lastProcessedPosition += line.length() + 1;
+                continue;
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Data parsing failed", e);
-            callback.onParseError(rawData, "解析错误: " + e.getMessage()); // 数据解析失败回调
-        }
-    }
 
-    /**
-     * 解析一行数据
-     * 使用正则表达式匹配数据格式并提取传感器信息
-     *
-     * @param cleanData 清理过的行数据
-     */
-    private void parseData(String cleanData) {
-        Matcher matcher = DATA_PATTERN.matcher(cleanData);
-        if (!matcher.find()) {
-            return; // 如果数据不匹配，则跳过
-        }
+            SensorData data = parseData(cleanLine);
+            if (data == null) {
+                lastProcessedPosition += line.length() + 1;
+                continue;
+            }
 
-        try {
-            // 从正则匹配结果中提取传感器数据
-            SensorData data = extractSensorData(matcher);
-            sensorDataList.add(data); // 将解析的数据添加到数据列表中
+            // 更新UI和回调（总是执行）
+            updateDisplay(data);
+            callback.onDataParsed(data);
 
-            // 如果开启了保存数据的功能，则保存数据到文件
+            // 互斥的数据保存逻辑
             if (isSavingData) {
-                saveDataToCSVFile(data); // 保存数据到 CSV 文件
+                saveDataToCSVFile(data);  // 只保存常规数据
             }
-            if (isSavingNoiseData) {
-                saveNoiseDataToCSVFile(data);
+            else if (isSavingNoiseData) {
+                saveNoiseDataToCSVFile(data);  // 只保存噪声数据
             }
+            // 如果两个标志都是false，则不保存任何数据
 
-            updateDisplay(data); // 更新 UI 显示
-            callback.onDataParsed(data); // 数据解析成功回调
-        } catch (NumberFormatException e) {
-            callback.onParseError(cleanData, "数值格式错误: " + e.getMessage()); // 处理解析过程中数值格式错误
+            lastProcessedPosition += line.length() + 1;
+        }
+
+        // 保留未处理的数据
+        if (lastProcessedPosition > 0) {
+            String remainingData = buffercontent.substring(lastProcessedPosition);
+            databuffer.setLength(0);
+            databuffer.append(remainingData);
         }
     }
+
+    private SensorData parseData(String cleanLine) {
+        Matcher matcher = DATA_PATTERN.matcher(cleanLine);
+        if (!matcher.find()) {
+            return null;
+        }
+        try {
+            return extractSensorData(matcher);
+        } catch (NumberFormatException e) {
+            callback.onParseError(cleanLine, "数值格式错误: " + e.getMessage());
+            return null;
+        }
+    }
+
+
 
     /**
      * 从正则表达式的匹配结果中提取传感器数据

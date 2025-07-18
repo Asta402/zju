@@ -30,9 +30,4 @@ public class SensorData {
                 timestamp, index, x, y, z, t);
     }
 
-    // 返回详细信息的字符串，适合用于日志输出或者调试
-    public String toDetailedString() {
-        return String.format("时间戳: %d | 索引: %d\nX轴: %.3f | Y轴: %.3f\nZ轴: %.3f | T值: %.3f",
-                timestamp, index, x, y, z, t);
-    }
 }
