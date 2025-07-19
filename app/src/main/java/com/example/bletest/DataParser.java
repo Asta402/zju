@@ -29,7 +29,7 @@ public class DataParser {
 
     // 正则表达式，用于解析数据格式
     private static final Pattern DATA_PATTERN = Pattern.compile(
-            "\\[(\\d+)\\]index:\\s*(\\d+)\\s*-\\s*x:\\s*([\\d.-]+)\\s*y:\\s*([\\d.-]+)\\s*z:\\s*([\\d.-]+)\\s*t:\\s*([\\d.-]+)"
+            "\\[(\\d+)\\](\\d+)x ([-\\d.]+)y ([-\\d.]+)z ([-\\d.]+)t ([-\\d.]+)"
     );
 
     // 用于显示解析后数据的 TextView

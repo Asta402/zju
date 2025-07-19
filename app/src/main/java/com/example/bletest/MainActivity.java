@@ -1,6 +1,5 @@
 package com.example.bletest;
 
-import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -8,16 +7,18 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-import android.os.Handler;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
 public class MainActivity extends AppCompatActivity implements BLEManager.BluetoothCallback {
 
     // 定义界面上的按钮和文本视图
     private Button btnScan, btnConnect, btnDisconnect, btnPermissions, btnReadData, btnSendTest, btnClearData, btnSaveData;
     private TextView tvStatus, tvData, tvDeviceName, tvPermissionStatus, tvServiceInfo, tvParsedData;
 
-    public ExecutorService executorService = null;
+    // 创建ExecutorService来管理后台线程
+    private ExecutorService executorService;
+
     // 定义蓝牙管理器、权限管理器和数据解析器
     private BLEManager bleManager;
     private PermissionManager permissionManager;
@@ -26,10 +27,7 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
     // 设备连接状态和数据保存状态标志
     private boolean isConnected = false;
 
-    private Thread readdatathread;
 
-    private boolean isreadding;
-    private int fileCounter = 1;  // 文件计数器
     // 初始化视图组件
     private void initViews() {
         btnScan = findViewById(R.id.btn_scan);
@@ -62,20 +60,8 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         setupClickListeners();
         Log.e("sss", "事件绑定成功");
 
-        // 更新UI
-        updateUI();
+        // 初始化线程池
         executorService = Executors.newSingleThreadExecutor();
-        readdatathread = new Thread(() -> {
-            while(isreadding) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-        });
-
     }
 
     // 初始化管理器
@@ -85,15 +71,14 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         dataParser = new DataParser(this.tvParsedData, new DataParser.DataDisplayCallback() {
             @Override
             public void onDataParsed(SensorData data) {
-
-                if(dataParser.isSavingNoiseData()){
+                if (dataParser.isSavingNoiseData()) {
                     dataParser.setSavingNoiseData(true);
                 }
             }
 
             @Override
             public void onParseError(String rawData, String errorMessage) {
-//                Log.e("处理错误:", errorMessage);
+                // 处理解析错误
             }
         });
     }
@@ -112,16 +97,11 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
 
         btnConnect.setOnClickListener(v -> {
             bleManager.connectToDevice();  // 连接设备
-
-            // 开始保存噪声数据
             dataParser.setSavingNoiseData(true);  // 开始保存噪声数据
-
         });
-
 
         btnDisconnect.setOnClickListener(v -> bleManager.disconnectDevice());
         btnPermissions.setOnClickListener(v -> permissionManager.requestBluetoothPermissions());
-//        btnSendTest.setOnClickListener(v -> bleManager.sendData("TEST"));
         btnClearData.setOnClickListener(v -> clearAllData());
         btnSaveData.setOnClickListener(v -> saveDataForTwoSeconds());
     }
@@ -134,23 +114,36 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         Toast.makeText(this, "数据已清空", Toast.LENGTH_SHORT).show();
     }
 
+    // 将保存数据的操作移到后台线程
     private void saveDataForTwoSeconds() {
         dataParser.setSavingNoiseData(false);
         Log.d("SaveData", "噪声数据保存结束，文件已关闭");
 
         dataParser.setSavingData(true);
 
+        // 在后台线程中延迟 2 秒后执行后续操作
+        executorService.submit(() -> {
+            try {
+                // 2秒延迟
+                Thread.sleep(2000);
 
-        // 3. 2秒后停止正样本数据，并重新启动噪声数据（生成新文件）
-        final Handler handler = new Handler();
-        handler.postDelayed(() -> {
-            dataParser.setSavingData(false);  // 停止正样本数据
-            Log.d("SaveData", "正样本数据保存结束");
-            dataParser.setSavingNoiseData(true); // 启动噪声记录
-            Log.d("SaveData", "噪声数据新文件已创建，继续采集");
-        }, 2000);
+                // 延迟后停止正样本数据，并重新启动噪声数据
+                dataParser.setSavingData(false);  // 停止正样本数据
+                Log.d("SaveData", "正样本数据保存结束");
 
-        fileCounter++;  // 更新正样本文件计数器
+                dataParser.setSavingNoiseData(true); // 启动噪声数据保存
+                Log.d("SaveData", "噪声数据新文件已创建，继续采集");
+
+                // 如果需要更新UI，使用 runOnUiThread 来更新主线程UI
+                runOnUiThread(() -> {
+                    tvStatus.setText("噪声数据继续采集");
+                });
+
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        });
+
     }
 
     // 更新UI界面
@@ -175,26 +168,17 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         }
     }
 
-    // BLEManager.BluetoothCallback 实现：接收到数据
-
-
     @Override
-    public void onScanHasResult(String devicename){
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                tvDeviceName.setText(devicename);
-            }
-        });
+    public void onScanHasResult(String devicename) {
+        runOnUiThread(() -> tvDeviceName.setText(devicename));
     }
+
     @Override
     public void onDataReceived(String data) {
-//        Log.e("raw data:", data);
         dataParser.processIncomingData(data);
         addLogMessage("接收数据: " + data);
     }
 
-    // 设备连接成功回调
     @Override
     public void onDeviceConnected(String deviceName) {
         isConnected = true;
@@ -205,9 +189,6 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         });
     }
 
-    // 设备断开连接回调
-
-
     @Override
     public void onDeviceDisconnected() {
         isConnected = false;
@@ -217,7 +198,7 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
             addLogMessage("设备已断开");
         });
     }
-    // 服务发现回调
+
     @Override
     public void onServicesDiscovered(String serviceInfo) {
         runOnUiThread(() -> {
@@ -226,7 +207,6 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         });
     }
 
-    // 错误回调
     @Override
     public void onError(String errorMessage) {
         runOnUiThread(() -> {
@@ -242,8 +222,7 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
             String newData = "[" + currentTime + "] " + message;
 
             String existingData = tvData.getText().toString();
-            if (existingData.startsWith("原始数据日志: 等待连接...") ||
-                    existingData.startsWith("原始数据日志: 已清空")) {
+            if (existingData.startsWith("原始数据日志: 等待连接...") || existingData.startsWith("原始数据日志: 已清空")) {
                 tvData.setText("原始数据日志:\n" + newData);
             } else {
                 tvData.setText(existingData + "\n" + newData);
@@ -251,10 +230,12 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         });
     }
 
-    // Activity销毁时断开蓝牙连接
     @Override
     protected void onDestroy() {
         super.onDestroy();
         bleManager.disconnectDevice();
+        if (executorService != null) {
+            executorService.shutdown();  // 关闭线程池
+        }
     }
 }
