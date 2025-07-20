@@ -26,7 +26,8 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
 
     // 设备连接状态和数据保存状态标志
     private boolean isConnected = false;
-
+    private long saveStartTime; // 记录开始保存的时间戳
+    private boolean isSavingData = false; // 标记是否正在保存数据
 
     // 初始化视图组件
     private void initViews() {
@@ -116,34 +117,16 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
 
     // 将保存数据的操作移到后台线程
     private void saveDataForTwoSeconds() {
+        // 停止噪声数据，开始正样本数据保存
         dataParser.setSavingNoiseData(false);
-        Log.d("SaveData", "噪声数据保存结束，文件已关闭");
-
         dataParser.setSavingData(true);
+        isSavingData = true; // 标记为正在保存
+        saveStartTime = System.currentTimeMillis(); // 记录开始时间
 
-        // 在后台线程中延迟 2 秒后执行后续操作
-        executorService.submit(() -> {
-            try {
-                // 2秒延迟
-                Thread.sleep(2000);
+        Log.d("SaveData", "开始保存正样本数据，持续2秒");
+        tvStatus.setText("正在保存正样本数据（2秒）...");
 
-                // 延迟后停止正样本数据，并重新启动噪声数据
-                dataParser.setSavingData(false);  // 停止正样本数据
-                Log.d("SaveData", "正样本数据保存结束");
-
-                dataParser.setSavingNoiseData(true); // 启动噪声数据保存
-                Log.d("SaveData", "噪声数据新文件已创建，继续采集");
-
-                // 如果需要更新UI，使用 runOnUiThread 来更新主线程UI
-                runOnUiThread(() -> {
-                    tvStatus.setText("噪声数据继续采集");
-                });
-
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        });
-
+        // 不需要显式延迟，数据回调中会自动检查时间
     }
 
     // 更新UI界面
@@ -158,6 +141,8 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
         btnSendTest.setEnabled(isConnected);
         btnPermissions.setVisibility(hasPermissions ? View.GONE : View.VISIBLE);
 
+
+
         if (!hasPermissions) {
             tvStatus.setText("请先授予蓝牙权限");
         } else if (!bluetoothEnabled) {
@@ -167,16 +152,44 @@ public class MainActivity extends AppCompatActivity implements BLEManager.Blueto
             tvStatus.setText(isConnected ? "已连接" : "准备就绪");
         }
     }
+    private void updateDisplay(SensorData data) {
+        if(data!=null){
+            String displayText = String.format(
+                    "时间戳: %d\n索引: %d\nX: %.3f\nY: %.3f\nZ: %.3f\nT: %.3f",
+                    data.timestamp, data.index, data.x, data.y, data.z, data.t
+            );
+            tvParsedData.setText(displayText); // 更新 TextView
+        }
 
+    }
+    @Override
+    public void onDataReceived(String data) {
+        long currentTime = System.currentTimeMillis();
+
+        // 检查是否正在保存数据，且已超过2秒
+        if (isSavingData && (currentTime - saveStartTime >= 2000)) {
+            dataParser.setSavingData(false); // 停止正样本
+            dataParser.setSavingNoiseData(true); // 恢复噪声数据
+            isSavingData = false; // 重置标记
+
+            runOnUiThread(() -> {
+                tvStatus.setText("噪声数据继续采集");
+                Toast.makeText(this, "正样本数据已保存2秒", Toast.LENGTH_SHORT).show();
+            });
+            Log.d("SaveData", "正样本数据保存结束，恢复噪声数据");
+        }
+
+        // 正常处理数据
+        dataParser.processIncomingData(data);
+
+        runOnUiThread(()->{
+            updateDisplay(dataParser.data);
+        });
+//        addLogMessage("接收数据: " + data);
+    }
     @Override
     public void onScanHasResult(String devicename) {
         runOnUiThread(() -> tvDeviceName.setText(devicename));
-    }
-
-    @Override
-    public void onDataReceived(String data) {
-        dataParser.processIncomingData(data);
-        addLogMessage("接收数据: " + data);
     }
 
     @Override

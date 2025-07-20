@@ -31,7 +31,7 @@ public class DataParser {
     private static final Pattern DATA_PATTERN = Pattern.compile(
             "\\[(\\d+)\\](\\d+)x ([-\\d.]+)y ([-\\d.]+)z ([-\\d.]+)t ([-\\d.]+)"
     );
-
+    public SensorData data;
     // 用于显示解析后数据的 TextView
     private final TextView tvParsedData;
 
@@ -84,54 +84,51 @@ public class DataParser {
      * @param rawData 原始接收到的数据
      */
     public void processIncomingData(String rawData) {
-        Log.e("raw data: ", rawData);
-        databuffer.append(rawData);
-        Log.e("processed_data:", databuffer.toString());
+//        Log.e("raw data: ", rawData);
+//        databuffer.append(rawData);
+//        Log.e("processed_data:", databuffer.toString());
 
-        String buffercontent = databuffer.toString()
-                .replace("\r", "")
-                .replace("\t", " ");
+//        String buffercontent = databuffer.toString()
+//                .replace("\r", "")
+//                .replace("\t", " ");
+//
+//        Log.e("processed_data",buffercontent);
+//        Log.e("processed_data",String.valueOf(buffercontent.length()));
 
-        String[] lines = buffercontent.split("\\n");
-        Log.e("lines", Arrays.toString(lines));
+        String[] lines = rawData.split("\\n");
+
         int lastProcessedPosition = 0;
 
 
         for (String line : lines) {
             String cleanLine = line.trim().replaceAll("\\s+", " ").trim();
-            if (cleanLine.isEmpty()) {
-                lastProcessedPosition += line.length() + 1;
-                continue;
-            }
 
-            SensorData data = parseData(cleanLine);
-            if (data == null) {
-                lastProcessedPosition += line.length() + 1;
-                continue;
-            }
+            data = parseData(cleanLine);
+//            Log.e("ssss",data.toString());
 
             // 更新UI和回调（总是执行）
-            updateDisplay(data);
+//            updateDisplay(data);
             callback.onDataParsed(data);
 
             // 互斥的数据保存逻辑
             if (isSavingData) {
-                saveDataToCSVFile(data);  // 只保存常规数据
-            }
-            else if (isSavingNoiseData) {
+               saveDataToCSVFile(data);  // 只保存常规数据
+           }
+          else if (isSavingNoiseData) {
                 saveNoiseDataToCSVFile(data);  // 只保存噪声数据
-            }
-            // 如果两个标志都是false，则不保存任何数据
+           }
+        // 如果两个标志都是false，则不保存任何数据
 
-            lastProcessedPosition += line.length() + 1;
+         lastProcessedPosition += line.length()+1;
         }
-
+      Log.e("processed_data",String.valueOf(lastProcessedPosition));
         // 保留未处理的数据
-        if (lastProcessedPosition > 0) {
-            String remainingData = buffercontent.substring(lastProcessedPosition);
-            databuffer.setLength(0);
-            databuffer.append(remainingData);
-        }
+       if (lastProcessedPosition > 0) {
+
+          databuffer.setLength(0);
+
+////            Log.e("processed_data",databuffer.toString());
+       }
     }
 
     private SensorData parseData(String cleanLine) {
@@ -188,13 +185,6 @@ public class DataParser {
      *
      * @param data 传感器数据
      */
-    private void updateDisplay(SensorData data) {
-        String displayText = String.format(
-                "时间戳: %d\n索引: %d\nX: %.3f\nY: %.3f\nZ: %.3f\nT: %.3f",
-                data.timestamp, data.index, data.x, data.y, data.z, data.t
-        );
-        tvParsedData.setText(displayText); // 更新 TextView
-    }
 
     /**
      * 获取当前的世界时间（UTC）
